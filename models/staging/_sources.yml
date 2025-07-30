@@ -1,0 +1,97 @@
+version: 2
+
+sources:
+  - name: raw_pixar
+    description: Raw Pixar data loaded from CSV files
+    database: PIXAR_DB
+    schema: raw
+    tables:
+      - name: pixar_films
+        description: Information about Pixar films
+        columns:
+          - name: number
+            description: Film sequence number
+          - name: film
+            description: Film title
+          - name: release_date
+            description: Film release date
+          - name: run_time
+            description: Film runtime in minutes
+          - name: film_rating
+            description: Film rating (G, PG, etc.)
+          - name: plot
+            description: Film plot summary
+
+      - name: pixar_people
+        description: People involved in Pixar films
+        columns:
+          - name: film
+            description: Film title
+          - name: role_type
+            description: Role type (Director, Producer, etc.)
+          - name: name
+            description: Person's name
+
+      - name: genre
+        description: Film genres and categories
+        columns:
+          - name: film
+            description: Film title
+          - name: category
+            description: Genre category
+          - name: value
+            description: Genre value
+
+      - name: box_office
+        description: Box office performance data
+        columns:
+          - name: film
+            description: Film title
+          - name: budget
+            description: Film budget
+          - name: box_office_us_canada
+            description: US/Canada box office
+          - name: box_office_other
+            description: Other territories box office
+          - name: box_office_worldwide
+            description: Worldwide box office
+
+      - name: public_response
+        description: Public ratings and reviews
+        columns:
+          - name: film
+            description: Film title
+          - name: rotten_tomatoes_score
+            description: Rotten Tomatoes score
+          - name: rotten_tomatoes_counts
+            description: Number of RT reviews
+          - name: metacritic_score
+            description: Metacritic score
+          - name: metacritic_counts
+            description: Number of Metacritic reviews
+          - name: cinema_score
+            description: CinemaScore rating
+          - name: imdb_score
+            description: IMDB rating
+          - name: imdb_counts
+            description: Number of IMDB votes
+
+      - name: academy
+        description: Academy Award nominations and wins
+        columns:
+          - name: film
+            description: Film title
+          - name: award_type
+            description: Type of award
+          - name: status
+            description: Won or Nominated
+
+      - name: pixar_data_dictionary
+        description: Data dictionary for the dataset
+        columns:
+          - name: table_name
+            description: Table name
+          - name: field
+            description: Field name
+          - name: description
+            description: Field description
