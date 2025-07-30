@@ -537,7 +537,7 @@ pixar_analytics/
 - Investment optimization and risk-adjusted returns
 - Production efficiency benchmarking
 
-## 🔧 Data Quality & Testing
+## Data Quality & Testing
 
 ### Automated Quality Checks
 
