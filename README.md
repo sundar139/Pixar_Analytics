@@ -1,317 +1,277 @@
-# Pixar Analytics ELT Pipeline
+# Pixar Analytics
 
-A comprehensive data transformation pipeline for Pixar film analysis using dbt and Snowflake, providing deep insights into the studio's 29-year journey from 1995 to 2024.
+![dbt Core](https://img.shields.io/badge/dbt-Core%201.10-orange?logo=dbt&logoColor=white)
+![Snowflake](https://img.shields.io/badge/Snowflake-Data%20Cloud-29B5E8?logo=snowflake&logoColor=white)
+![ELT](https://img.shields.io/badge/Pattern-ELT-0A66C2)
+![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)
 
-## Project Overview
+Snowflake + dbt ELT project that converts raw Pixar film data into governed analytical models for finance, ratings, awards, genre, talent, and trend analysis.
 
-This ELT pipeline transforms raw Pixar data into actionable business intelligence, covering:
+## Executive Overview
 
-- **Financial Performance**: Budget allocation, box office returns, ROI analysis
-- **Critical Reception**: Multi-platform rating aggregation and consistency analysis
-- **Awards Recognition**: Academy Awards tracking and correlation analysis
-- **Industry Evolution**: Trend analysis across decades and genres
-- **Talent Analysis**: Director and producer performance metrics
+This repository implements a layered ELT analytics stack on Snowflake using dbt. The project ingests raw CSV-backed film data into a RAW schema, standardizes and enriches it through staging and intermediate models, and publishes dimensional/fact/reporting tables in MARTS for downstream analysis.
 
-## Architecture Overview
+The design emphasizes:
 
-### ELT Data Flow
+- SQL-first transformations pushed down to Snowflake compute
+- Clear model layering and dependency management via dbt
+- Reusable macros and package-driven conventions
+- Explicit data quality checks (schema tests + custom SQL tests)
+- Traceable build artifacts committed under target for reproducibility evidence
 
+## Architecture And ELT Flow
+
+### End-to-end flow
+
+```text
+CSV files
+	-> Snowflake stage + COPY INTO (RAW)
+	-> dbt staging views (cleaning/typing/standardization)
+	-> dbt intermediate views (business logic)
+	-> dbt marts tables (dimensions/facts/reports)
+	-> analytics consumption in Snowflake
 ```
-Raw CSV Files → Extract & Load → Snowflake Raw Tables → Transform (dbt) → Analytics Marts
+
+### Warehouse and schema strategy
+
+- Warehouse: PIXAR_WH
+- Database: PIXAR_DB
+- Schemas: RAW, STAGING, MARTS
+- Role model: PIXAR_ROLE granted ownership/usage in setup SQL
+
+The provisioning and load sequence is codified in snowflake_ui_code.sql.
+
+## Repository Structure
+
+```text
+pixar_analytics/
+├─ dbt_project.yml
+├─ packages.yml
+├─ profiles.yml
+├─ snowflake_ui_code.sql
+├─ macros/
+│  ├─ generate_surrogate_key.sql
+│  ├─ get_current_timestamp.sql
+│  └─ get_custom_schema.sql
+├─ models/
+│  ├─ staging/         (7 SQL models + sources)
+│  ├─ intermediate/    (3 SQL models)
+│  └─ marts/           (15 SQL models + schema tests)
+├─ tests/              (4 custom singular SQL tests)
+├─ analyses/
+├─ seeds/
+├─ snapshots/
+└─ target/             (manifest, run_results, compiled/run SQL)
 ```
 
-The pipeline follows the modern ELT (Extract, Load, Transform) pattern:
+## Dataset Coverage
 
-1. **Extract**: Raw CSV files are collected from various data sources
-2. **Load**: Data is loaded directly into Snowflake raw tables without transformation
-3. **Transform**: All transformations happen within Snowflake using dbt's SQL-based approach
+Source coverage is defined in models/staging/_sources.yml and loaded in snowflake_ui_code.sql.
 
-### Layer Structure
+Raw entities:
 
-- **Raw Layer**: Untransformed CSV data loaded directly into Snowflake (preserves original data structure)
-- **Staging Layer**: Data cleaning, standardization, and basic transformations within Snowflake
-- **Intermediate Layer**: Business logic implementation and feature engineering using dbt
-- **Marts Layer**: Final analytical tables optimized for reporting and analytics
+- pixar_films: film metadata, release date, runtime, rating, plot
+- pixar_people: people by film and role type
+- genre: categorical descriptors by film
+- box_office: budget and regional/worldwide grosses
+- public_response: Rotten Tomatoes, Metacritic, IMDb, CinemaScore fields
+- academy: award category and nomination/win status
+- pixar_data_dictionary: metadata dictionary for source fields
 
-### ELT Architecture Benefits
+Analytical domains covered by marts:
 
-- **Leverages Snowflake's compute power**: All transformations utilize cloud warehouse processing
-- **Data preservation**: Original raw data maintained for auditing and re-processing
-- **Flexible transformations**: Schema-on-read approach allows for iterative data modeling
-- **Scalable processing**: Cloud-native architecture handles large data volumes efficiently
+- Financial performance and budget efficiency
+- Critical reception and cross-platform score consistency
+- Awards outcomes and performance correlations
+- Genre and franchise behavior
+- Seasonal, runtime, and competition positioning trends
+- Director performance analytics
 
-## Dataset Overview
+## Major Features And Why They Exist
 
-### Core Data Coverage
+| Feature | Implemented In | What It Does | Why It Exists |
+|---|---|---|---|
+| Layered ELT modeling | models/staging, models/intermediate, models/marts | Separates cleaning, business logic, and serving models | Keeps transformations maintainable and auditable |
+| Surrogate key strategy | macros/generate_surrogate_key.sql + dim models | Builds stable hashed keys (film_key, person_key) | Decouples analytics keys from mutable source text |
+| Financial classification | int_film_financials, rpt_financial_analysis | Derives ROI and performance tiers | Enables portfolio-level profitability comparisons |
+| Cross-platform rating normalization | int_film_ratings | Harmonizes critic metrics (including IMDb scale conversion) | Prevents invalid averaging across incompatible score scales |
+| Awards aggregation and correlation | int_film_awards, fact_film_awards, rpt_awards_analysis | Summarizes wins/nominations and links to commercial performance | Supports impact analysis of awards vs outcomes |
+| Talent analytics | dim_people, rpt_people_analysis | Aggregates director/producer career-level metrics | Enables people-centric performance assessment |
+| Strategic report marts | rpt_* models | Produces decision-ready views (genre, franchise, seasonal, runtime, competition) | Provides focused business questions without repeated ad hoc SQL |
+| Data quality assertions | models/marts/_schema.yml + tests/*.sql | Validates keys, ranges, relationships, and business rules | Detects regressions before downstream consumption |
 
-- **28 Pixar Films** (1995-2024): Complete theatrical releases
-- **$2.8B+ Total Budget**: Production investment tracking
-- **$14B+ Worldwide Revenue**: Box office performance
-- **15,000+ Professional Reviews**: Critical reception analysis
-- **2M+ Audience Ratings**: Public sentiment tracking
-- **89 Academy Award Records**: Complete Oscar history
-- **260+ Personnel Records**: Key talent across all roles
+## Snowflake + dbt Implementation Details
 
-### Data Sources
+### dbt project behavior
 
-1. **pixar_films.csv**: Core film information and metadata
-2. **pixar_people.csv**: Directors, producers, and key talent
-3. **genre.csv**: Content classification and taxonomy
-4. **box_office.csv**: Complete financial performance data
-5. **public_response.csv**: Multi-platform ratings and reviews
-6. **academy.csv**: Awards nominations and wins
-7. **pixar_data_dictionary.csv**: Self-documenting metadata
+Configured in dbt_project.yml:
 
-## Quick Start Guide
+- staging: materialized as view in schema staging
+- intermediate: materialized as view in schema staging
+- marts: materialized as table in schema marts
+- vars: start_date=1995-01-01, end_date=2024-12-31
+
+### Macro usage
+
+- generate_surrogate_key.sql wraps dbt_utils generate_surrogate_key with adapter dispatch
+- get_custom_schema.sql overrides generate_schema_name to honor explicit schema names
+- get_current_timestamp.sql centralizes timestamp expression
+
+### Package usage
+
+Configured in packages.yml:
+
+- dbt-labs/dbt_utils (v1.3.0)
+- metaplane/dbt_expectations (v0.10.9)
+
+Usage patterns in this project include surrogate key generation and expectation-style numeric range checks.
+
+## Problems Faced And What Was Solved
+
+1. Key consistency across heterogeneous sources
+
+- Problem: Source joins rely heavily on film names from multiple CSVs.
+- Solution: staging models normalize text with trim and enforce null filtering on critical key columns; dimensional models then apply surrogate keys.
+
+2. Metric comparability across rating systems
+
+- Problem: Rotten Tomatoes and Metacritic are 100-point scales while IMDb is 10-point.
+- Solution: int_film_ratings rescales IMDb by x10 before computing avg_critic_score.
+
+3. Governance of business logic in a growing analytics surface
+
+- Problem: Logic for finance, awards, genre, and trends can sprawl if implemented ad hoc.
+- Solution: domain-specific rpt_* marts encapsulate reusable analytical logic with explicit classifications and ranking windows.
+
+4. Data quality risk in warehouse-native ELT
+
+- Problem: Loading first and transforming later can propagate bad records quickly.
+- Solution: schema tests and custom singular tests assert ranges, date logic, financial consistency, and positive box office constraints.
+
+5. Schema targeting across environments
+
+- Problem: dbt default schema behavior can produce inconsistent object locations across targets.
+- Solution: custom schema macro enforces deterministic schema naming behavior.
+
+## Setup And Run Instructions
 
 ### Prerequisites
 
-- Snowflake account with appropriate permissions
-- Python 3.9+ installed
-- VS Code or preferred IDE
+- Python 3.9+
+- dbt Core + dbt-snowflake adapter
+- Snowflake account with privileges to create warehouse/database/schema/role
 
-### Step 1: Environment Setup
+### 1) Install dbt
 
 ```bash
-# Install dbt with Snowflake adapter
 pip install dbt-snowflake
-
-# Verify installation
 dbt --version
 ```
 
-### Step 2: Snowflake Infrastructure Setup
+### 2) Provision Snowflake objects and load RAW data
 
-Execute the infrastructure setup scripts in Snowflake Web Interface to create:
+Run snowflake_ui_code.sql in Snowflake (worksheet/UI) in reviewable sections:
 
-- Data warehouse with appropriate sizing for ELT processing
-- Database and schema structure (RAW, STAGING, MARTS)
-- User roles and permissions for data access
-- File formats and internal stages for data loading
-- Raw data tables with proper schemas (no transformation at load time)
+- warehouse/database/schema creation
+- role grants
+- file format + stage creation
+- RAW table DDL
+- COPY INTO commands for CSV ingestion
 
-### Step 3: Data Loading Process (ELT Extract & Load Phase)
+### 3) Configure profile
 
-1. Upload CSV files to Snowflake internal stage
-2. Execute COPY commands to load raw data into tables (no transformations applied)
-3. Verify data integrity and completeness of loaded data
-4. Raw data is now ready for transformation within the warehouse
+Set the dbt profile named pixar_analytics to your environment values (account, user, role, warehouse, database, schema, threads).
 
-### Step 4: dbt Project Configuration
+Security note: use secret management (environment variables or local-only profiles) for credentials instead of committing sensitive values.
 
-#### A. Initialize Project
+### 4) Install dbt dependencies
 
 ```bash
-# Initialize project
-dbt init pixar_analytics
-cd pixar_analytics
-```
-
-#### B. Configure Connection Profile
-
-Set up connection details in `~/.dbt/profiles.yml` with your Snowflake credentials
-
-#### C. Install Dependencies
-
-```bash
-# Install required packages
 dbt deps
 ```
 
-### Step 5: Execute ELT Pipeline (Transform Phase)
+### 5) Validate, run, and test
 
 ```bash
-# Test connection
 dbt debug
-
-# Run all transformations within Snowflake
-dbt run
-
-# Execute data quality tests
+dbt run --full-refresh
 dbt test
+```
 
-# Generate documentation
+### 6) Build docs
+
+```bash
 dbt docs generate
 dbt docs serve
 ```
 
-## Project Structure
+## Configuration And Package Notes
 
-```
-pixar_analytics/
-├── dbt_project.yml              # Main project configuration
-├── profiles.yml                 # Connection configuration
-├── packages.yml                 # dbt package dependencies
-├── README.md                    # This file
-├── macros/
-│   ├── get_custom_schema.sql    # Schema naming override
-│   └── get_current_timestamp.sql # Utility macro
-├── models/
-│   ├── staging/                 # Data cleaning layer
-│   │   ├── _sources.yml         # Source definitions
-│   │   ├── stg_pixar_films.sql
-│   │   ├── stg_pixar_people.sql
-│   │   ├── stg_genre.sql
-│   │   ├── stg_box_office.sql
-│   │   ├── stg_public_response.sql
-│   │   ├── stg_academy.sql
-│   │   └── stg_data_dictionary.sql
-│   ├── intermediate/            # Business logic layer
-│   │   ├── int_film_financials.sql
-│   │   ├── int_film_ratings.sql
-│   │   └── int_film_awards.sql
-│   └── marts/                   # Analytics layer
-│       ├── _schema.yml          # Model documentation & tests
-│       ├── dim_films.sql        # Film dimension
-│       ├── dim_people.sql       # People dimension
-│       ├── fact_film_performance.sql    # Performance facts
-│       ├── fact_film_awards.sql         # Awards facts
-│       ├── rpt_financial_analysis.sql   # Financial analytics
-│       ├── rpt_critical_analysis.sql    # Critical reception
-│       ├── rpt_evolution_analysis.sql   # Trend analysis
-│       ├── rpt_genre_performance.sql    # Genre insights
-│       ├── rpt_people_analysis.sql      # Talent analysis
-│       ├── rpt_awards_analysis.sql      # Awards correlation
-│       ├── rpt_franchise_analysis.sql   # Franchise performance
-│       ├── rpt_seasonal_analysis.sql    # Release timing
-│       ├── rpt_competition_analysis.sql # Market positioning
-│       ├── rpt_runtime_analysis.sql     # Runtime optimization
-│       └── rpt_budget_efficiency.sql    # Budget effectiveness
-├── tests/                       # Custom data quality tests
-│   ├── assert_positive_box_office.sql
-│   ├── assert_score_ranges.sql
-│   ├── assert_release_date_logic.sql
-│   └── assert_financial_consistency.sql
-└── target/                      # Generated artifacts
-```
+- dbt package lock artifacts are present under dbt_packages and package lock files.
+- dbt_utils is used for key generation and shared utility macros.
+- dbt_expectations is used for bound checks in mart schema tests (for example year and percentage ranges).
+- The model selection graph is available in target/manifest.json and target/graph_summary.json.
 
-## Data Models Overview
+## Results And Evidence (Repository-Backed)
 
-### Staging Layer (`PIXAR_DB.STAGING`)
+This section only cites tracked repository artifacts.
 
-**Core staging models** clean and standardize raw data:
+- target/run_results.json exists and records a dbt run with:
+	- dbt version: 1.10.5
+	- invocation command: dbt run --full-refresh
+	- generated_at: 2025-07-29T22:45:55.117216Z
+	- result count: 25 nodes, status success=25
+- target/manifest.json and target/semantic_manifest.json are committed, proving a compiled project graph and metadata snapshot were generated.
+- target/compiled/pixar_analytics and target/run/pixar_analytics contain compiled and executed SQL artifacts for models/tests.
+- snowflake_ui_code.sql includes post-load and post-transform verification queries that demonstrate intended validation workflow in Snowflake.
 
-- **stg_pixar_films**: Clean film information with date parsing and text normalization
-- **stg_pixar_people**: Normalize talent information with role standardization
-- **stg_genre**: Categorize films with standardized genre taxonomy
-- **stg_box_office**: Financial data with revenue calculations and ROI derivation
-- **stg_public_response**: Multi-platform rating aggregation and score normalization
-- **stg_academy**: Awards data with category classification and win/loss indicators
+What is intentionally not claimed:
 
-### Intermediate Layer (`PIXAR_DB.STAGING`)
+- No business KPI values are asserted in this README from untracked query output screenshots.
+- No CI/CD pass badge or deployment claim is made because such evidence is not committed.
 
-**Business logic implementation**:
+## Evaluation And Data Quality
 
-- **int_film_financials**: Financial performance categorization and ROI tiers
-- **int_film_ratings**: Cross-platform score averaging and consistency analysis
-- **int_film_awards**: Awards aggregation with win rate calculations
+Quality controls implemented in the project:
 
-### Marts Layer (`PIXAR_DB.MARTS`)
+- Generic/schema tests in models/marts/_schema.yml:
+	- unique and not_null constraints
+	- relationships tests between facts and dimensions
+	- accepted_values tests for categorical outputs
+	- dbt_expectations numeric bound assertions
+- Custom singular SQL tests in tests:
+	- assert_positive_box_office.sql
+	- assert_score_ranges.sql
+	- assert_release_date_logic.sql
+	- assert_financial_consistency.sql
 
-#### Core Dimensions & Facts
-
-- **dim_films**: Master film registry with comprehensive metadata
-- **dim_people**: Talent directory with career analytics
-- **fact_film_performance**: Primary analytical table with integrated performance metrics
-- **fact_film_awards**: Detailed awards transaction history
-
-#### Advanced Analytics Reports
-
-- **rpt_financial_analysis**: Market performance and profitability insights
-- **rpt_critical_analysis**: Multi-platform reception analysis
-- **rpt_evolution_analysis**: Year-over-year trends and industry evolution
-- **rpt_genre_performance**: Genre-based success analysis
-- **rpt_people_analysis**: Director and producer performance metrics
-- **rpt_awards_analysis**: Academy Awards correlation analysis
-- **rpt_franchise_analysis**: Franchise portfolio performance
-- **rpt_seasonal_analysis**: Release timing optimization
-- **rpt_competition_analysis**: Market positioning analysis
-- **rpt_runtime_analysis**: Content length optimization
-- **rpt_budget_efficiency**: Cost-effectiveness analysis
-
-## Data Quality & Testing
-
-### Automated Quality Framework
-
-The pipeline includes comprehensive testing across multiple dimensions:
-
-#### Schema Tests
-
-- Primary and foreign key uniqueness validation
-- Critical field completeness checks
-- Categorical field value validation
-- Cross-table referential integrity
-
-#### Custom Business Logic Tests
-
-- Financial consistency validation across related tables
-- Score range validation for rating platforms
-- Temporal logic validation for release dates
-- Revenue calculation accuracy checks
-
-#### Statistical Data Quality
-
-- Distribution analysis and outlier detection
-- Data freshness monitoring
-- Completeness trending analysis
-
-### Test Execution Process
+Evaluation guidance:
 
 ```bash
-# Run all tests
 dbt test
-
-# Run specific test categories
-dbt test --select tag:financial
-dbt test --select tag:critical_scores
-
-# Test specific models
 dbt test --select fact_film_performance
-```
-
-## Business Value & Use Cases
-
-### Strategic Decision Support
-
-- **Investment Planning**: Historical ROI patterns guide budget allocation
-- **Talent Acquisition**: Performance benchmarking for hiring decisions
-- **Genre Strategy**: Market opportunity identification
-- **Release Planning**: Optimal timing based on seasonal analysis
-
-### Operational Excellence
-
-- **Performance Benchmarking**: Film success measurement against studio averages
-- **Risk Assessment**: Budget vs expected return modeling
-- **Competitive Analysis**: Market positioning within animation industry
-- **Resource Optimization**: Production efficiency insights
-
-### Marketing Intelligence
-
-- **Audience Segmentation**: Critical vs commercial appeal analysis
-- **Awards Strategy**: Oscar campaign ROI measurement
-- **Brand Positioning**: Market evolution analysis
-- **Content Strategy**: Genre optimization and franchise development
-
-## Troubleshooting Guide
-
-### Common Issues & Solutions
-
-**Schema Naming Problems**: Verify custom schema macro exists and run with full refresh
-
-**Connection Issues**:
-
-```bash
-dbt debug
-```
-
-Check Snowflake credentials, warehouse status, and role permissions
-
-**Data Quality Failures**:
-
-```bash
 dbt test --store-failures
 ```
 
-Investigate specific test failures and data inconsistencies
+## Limitations
 
-**Performance Issues**: Review warehouse sizing, query execution history, and consider optimization strategies
+- Credentials are currently represented in repository profile configuration; this should be externalized for secure collaboration.
+- Several joins are title-based, so title variant mismatches can affect link rates unless additional canonical keys are introduced.
+- target artifacts are a historical execution snapshot, not a guarantee of current-environment reproducibility.
+- seeds and snapshots directories are present but not actively used in the committed implementation.
+
+## Conclusion
+
+Pixar Analytics demonstrates a practical, warehouse-native dbt implementation: clear layering, reusable macros, domain-focused report marts, and explicit quality checks. It is positioned as an analytics engineering portfolio project with credible implementation depth and reproducible SQL assets.
+
+## Future Improvements
+
+1. Externalize credentials and role/account config via environment-based profile templating.
+2. Add source freshness checks and exposures to formalize SLA-style data contracts.
+3. Introduce snapshots for slowly changing entities (for example people-role history).
+4. Add slim CI for dbt parse/build/test against a dev Snowflake target with sanitized sample data.
+5. Publish sample query result extracts or dashboard screenshots with commit-linked provenance.
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](./LICENSE) file for details.
